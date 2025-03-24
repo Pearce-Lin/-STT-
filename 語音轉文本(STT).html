@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Cloud 語音轉文字工具</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #4285F4;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .control-panel {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .btn {
+            background-color: #4285F4;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        .btn:hover {
+            background-color: #3367D6;
+        }
+        .btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .btn-red {
+            background-color: #EA4335;
+        }
+        .btn-red:hover {
+            background-color: #D33426;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+            font-size: 16px;
+        }
+        select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+        }
+        .status {
+            margin-top: 10px;
+            font-style: italic;
+            color: #666;
+        }
+        .recording-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background-color: #EA4335;
+            border-radius: 50%;
+            margin-right: 5px;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Google Cloud 語音轉文字工具</h1>
+        
+        <div class="control-panel">
+            <h3>語言設定</h3>
+            <select id="language">
+                <option value="cmn-Hans-CN">中文 (普通話)</option>
+                <option value="cmn-Hant-TW">中文 (台灣)</option>
+                <option value="yue-Hant-HK">中文 (粵語)</option>
+                <option value="en-US">English (US)</option>
+                <option value="ja-JP">日本語</option>
+                <option value="ko-KR">한국어</option>
+            </select>
+            
+            <h3>操作控制</h3>
+            <button id="startBtn" class="btn">開始錄音</button>
+            <button id="stopBtn" class="btn btn-red" disabled>停止錄音</button>
+            <button id="clearBtn" class="btn">清除文字</button>
+            
+            <div class="status" id="status">準備就緒</div>
+        </div>
+        
+        <h3>轉換結果</h3>
+        <textarea id="transcript" placeholder="轉換後的文字將顯示在這裡..."></textarea>
+    </div>
+
+    <script>
+        // 這裡需要替換為你的 Google Cloud API 金鑰
+        const API_KEY = 'AIzaSyCdnQBUhz0xuQtVUVA3QuAWyUV6viPNktM';
+        
+        let recognition;
+        let isRecording = false;
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const transcript = document.getElementById('transcript');
+        const language = document.getElementById('language');
+        const status = document.getElementById('status');
+        
+        // 初始化語音識別
+        function initSpeechRecognition() {
+            if (!('webkitSpeechRecognition' in window)) {
+                status.textContent = '您的瀏覽器不支援語音識別功能，請使用 Chrome 瀏覽器。';
+                startBtn.disabled = true;
+                return;
+            }
+            
+            recognition = new webkitSpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            
+            recognition.onstart = function() {
+                isRecording = true;
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                status.innerHTML = '<span class="recording-indicator"></span> 正在錄音中...';
+            };
+            
+            recognition.onerror = function(event) {
+                console.error('識別錯誤:', event.error);
+                status.textContent = '錯誤: ' + event.error;
+                stopRecording();
+            };
+            
+            recognition.onend = function() {
+                if (isRecording) {
+                    // 如果仍在錄音狀態但被結束，則重新啟動
+                    recognition.start();
+                }
+            };
+            
+            recognition.onresult = function(event) {
+                let interimTranscript = '';
+                let finalTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+                
+                if (finalTranscript) {
+                    transcript.value += finalTranscript;
+                }
+                // 可以選擇是否顯示臨時結果
+                // transcript.value = transcript.value + interimTranscript;
+            };
+        }
+        
+        // 開始錄音
+        function startRecording() {
+            if (!recognition) {
+                initSpeechRecognition();
+            }
+            
+            recognition.lang = language.value;
+            try {
+                recognition.start();
+            } catch (error) {
+                status.textContent = '錯誤: ' + error.message;
+            }
+        }
+        
+        // 停止錄音
+        function stopRecording() {
+            if (recognition) {
+                isRecording = false;
+                recognition.stop();
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                status.textContent = '錄音已停止';
+            }
+        }
+        
+        // 清除文字
+        function clearText() {
+            transcript.value = '';
+            status.textContent = '文字已清除';
+        }
+        
+        // 事件監聽
+        startBtn.addEventListener('click', startRecording);
+        stopBtn.addEventListener('click', stopRecording);
+        clearBtn.addEventListener('click', clearText);
+        
+        // 初始化
+        initSpeechRecognition();
+    </script>
+</body>
+</html>
